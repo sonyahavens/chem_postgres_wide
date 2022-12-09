@@ -1,0 +1,69 @@
+---
+title: "chem_postgres_wide"
+author: "Sonya Havens"
+date: "2022-12-06"
+output:
+  html_document:
+  keep.md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_packages, include = FALSE}
+library(tidyverse)
+library(janitor)
+library(here)
+library(ggridges) # not needed for pivot wide, but included in case needed for plotting
+library(viridis) # not needed for pivot wide, but included in case needed for plotting
+library(viridisLite) # not needed for pivot wide, but included in case needed for plotting
+library(patchwork) # not needed for pivot wide, but included in case needed for plotting
+library(ggrepel) # not needed for pivot wide, but included in case needed for plotting
+library(lubridate)
+```
+
+```{r load_data}
+# load, clean, and filter data
+
+data_orig <- read_csv(here("data", "2014to2020_chem_Postgres.csv")) %>% 
+  clean_names() %>% 
+  select(monitoring_location, monitoring_sublocation, monitoring_station, year, activity_start_date, activity_depth_height_measure, activity_depth_height_unit, layer_collection_start_depth, layer_collection_end_depth, characteristic_name, result_value, activity_media_name, laboratory_sample_id) %>% 
+  mutate(site = str_c(str_replace_na(monitoring_location, replacement = ""), "_",
+                         str_replace_na(monitoring_sublocation, replacement = ""), "_",
+                         str_replace_na(monitoring_station, replacement = ""),  "_",
+                         str_replace_na(activity_depth_height_measure, replacement = ""), "_",
+                         str_replace_na(activity_depth_height_unit, replacement = ""),
+                         sep = "")) %>% 
+  mutate(characteristic_name = if_else(is.na(characteristic_name), "sodium", characteristic_name)) %>% # this is to change 'na' to 'sodium' so that it is not treated as null
+  rename(parameter = characteristic_name) %>% 
+  rename(result = result_value) %>% # renaming these isn't necessary, I just prefer these terms
+  mutate(collect_date = ymd(activity_start_date)) %>% # activity_start_date changed to collect_date, can removed if prefer original term
+  mutate(julian = yday(collect_date)) %>%  # adding a new column with the julian day in case needed for plotting, can remove this line if not needed
+  
+# Need to change items in the parameter column to remove the mathematical expressions. Wanted to use if_else or case_when, but couldn't seem to get it to work, so using the str_replace function.
+
+   mutate(parameter = tolower(parameter)) %>% 
+   mutate(parameter = str_replace(parameter, "e2:e3", "e2_e3")) %>% 
+   mutate(parameter = str_replace(parameter, "e2:e4", "e2_e4")) %>% 
+   mutate(parameter = str_replace(parameter, "s275-295", "s275_295")) %>% 
+   mutate(parameter = str_replace(parameter, "s350-400", "s350_400")) 
+ 
+print(unique(data_orig$parameter)) # printing the parameters to verify they are correct
+
+```
+
+```{r pivot_wide}
+data_wide <- data_orig %>%
+  pivot_wider(names_from = parameter, values_from = result)
+
+glimpse(data_wide)
+```
+
+```{r write_new_df}
+
+write_csv(data_wide, here("data", "2014to2020_chem_postgres_wide.csv"))
+
+```
+
+
